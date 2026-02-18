@@ -1,0 +1,141 @@
+version: "3.9"
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7
+    container_name: aiscra_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=supply_risk_db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/supply_risk_db --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aiscra_network
+
+  # Redis (Cache & Message Broker)
+  redis:
+    image: redis:7-alpine
+    container_name: aiscra_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aiscra_network
+
+  # FastAPI Backend
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aiscra_api
+    ports:
+      - "8000:8000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - NEWSAPI_KEY=${NEWSAPI_KEY}
+      - MONGO_URI=mongodb://mongodb:27017
+      - MONGO_DB_NAME=supply_risk_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=development
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - aiscra_network
+
+  # Celery Worker (Background Tasks)
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aiscra_worker
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - NEWSAPI_KEY=${NEWSAPI_KEY}
+      - MONGO_URI=mongodb://mongodb:27017
+      - MONGO_DB_NAME=supply_risk_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - LOG_LEVEL=INFO
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: celery -A src.ingestion.celery_app worker --loglevel=info
+    networks:
+      - aiscra_network
+
+  # Celery Beat (Scheduler)
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aiscra_beat
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - NEWSAPI_KEY=${NEWSAPI_KEY}
+      - MONGO_URI=mongodb://mongodb:27017
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - NEWS_FETCH_INTERVAL_MINUTES=15
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+    volumes:
+      - ./backend:/app
+    command: celery -A src.ingestion.celery_app beat --loglevel=info
+    networks:
+      - aiscra_network
+
+  # Frontend React App
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: aiscra_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
+      - VITE_WS_URL=ws://localhost:8000/ws/alerts
+    networks:
+      - aiscra_network
+
+volumes:
+  mongo_data:
+  redis_data:
+
+networks:
+  aiscra_network:
+    driver: bridge

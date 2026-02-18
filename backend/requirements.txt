@@ -1,0 +1,49 @@
+# Core API Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# Task Queue & Messaging
+celery==5.3.6
+redis==5.0.1
+
+# Database
+pymongo==4.6.1
+motor==3.3.2  # Async MongoDB driver for FastAPI
+
+# AI/LLM
+google-generativeai==0.3.2
+langchain==0.1.6
+langchain-google-genai==0.0.7
+langgraph==0.0.20
+
+# Graph Analysis
+networkx==3.2.1
+
+# NLP (optional, for entity extraction)
+spacy==3.7.2
+
+# HTTP Clients
+requests==2.31.0
+httpx==0.26.0
+
+# Data Processing
+pandas==2.1.4
+numpy==1.26.3
+
+# Notifications
+sendgrid==6.11.0
+
+# Utilities
+python-dateutil==2.8.2
+pyyaml==6.0.1
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+
+# WebSocket
+websockets==12.0
