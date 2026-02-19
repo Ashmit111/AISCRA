@@ -1,0 +1,578 @@
+\documentclass[conference]{IEEEtran}
+
+% ---- Packages ----
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{url}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    frame=single,
+    captionpos=b
+}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{AISCRA: AI-Powered Supply Chain Risk Analysis System Using Multi-Agent Architecture and Graph-Based Risk Propagation}
+
+\author{
+\IEEEauthorblockN{Sumit Singh, Ashmit Singh, Sumit Singh}
+\IEEEauthorblockA{
+Department of Computer Engineering \\
+Lokmanya Tilak College of Engineering, Navi Mumbai \\
+University of Mumbai, India \\
+}
+\and
+\IEEEauthorblockN{Prof. Rajendra D. Gawali}
+\IEEEauthorblockA{
+Project Guide \\
+Department of Computer Engineering \\
+Lokmanya Tilak College of Engineering, Navi Mumbai \\
+University of Mumbai, India \\
+}
+}
+
+\maketitle
+
+% ================================================================
+% ABSTRACT
+% ================================================================
+\begin{abstract}
+Global supply chains face increasing disruptions from geopolitical tensions, natural disasters, regulatory changes, and market volatility. Traditional risk management approaches rely on periodic manual assessments, which are insufficient for the speed and complexity of modern supply networks. This paper presents AISCRA (AI Supply Chain Risk Analysis), an intelligent, real-time supply chain risk monitoring and mitigation platform. The system integrates real-time news ingestion from external APIs, AI-driven risk extraction using Google Gemini large language models, a quantitative multi-factor risk scoring engine, graph-based risk propagation through multi-tier supply networks using NetworkX, automated alternate supplier recommendation, and a conversational AI agent for natural language querying. The platform is built on a microservices architecture using FastAPI, Celery, Redis Streams, and MongoDB, with a React-based interactive dashboard featuring live WebSocket updates and Cytoscape.js supply chain visualization. Experimental evaluation on a petroleum supply chain case study (Nayara Energy) demonstrates that the system reduces risk identification latency from days to minutes, achieves accurate risk classification, and provides actionable mitigation recommendations with quantified alternate supplier scoring.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Supply chain risk management, artificial intelligence, large language models, graph-based risk propagation, multi-agent systems, real-time monitoring, alternate supplier recommendation, natural language processing
+\end{IEEEkeywords}
+
+% ================================================================
+% I. INTRODUCTION
+% ================================================================
+\section{Introduction}
+
+Modern global supply chains are intricate, multi-tier networks spanning dozens of countries, hundreds of suppliers, and thousands of material flows. A single disruption---whether a port blockage, a geopolitical sanction, or a natural disaster---can cascade through these networks, causing production halts and revenue losses within hours \cite{ivanov2020}. The COVID-19 pandemic, the Suez Canal blockage of 2021, and ongoing geopolitical tensions have exposed the fragility of supply chains that were optimized for cost efficiency rather than resilience \cite{bier2020}.
+
+Traditional supply chain risk management relies on periodic assessments, spreadsheet-based tracking, and manual news monitoring, which cannot keep pace with the volume and velocity of disruptions in modern supply ecosystems \cite{chopra2004}. Risk analysts spend significant time aggregating information from disparate sources, and by the time a risk is identified and quantified, its impact may have already propagated through the network.
+
+Recent advances in artificial intelligence, particularly large language models (LLMs) and graph algorithms, offer new possibilities for automating and accelerating supply chain risk analysis \cite{wichmann2020}. LLMs can process unstructured text (news articles, financial reports, social media) to extract structured risk signals, while graph algorithms can model and simulate risk propagation through complex supplier networks \cite{ghadge2012}.
+
+This paper presents AISCRA (AI Supply Chain Risk Analysis), a comprehensive platform that addresses these challenges through:
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Real-time data ingestion}: Continuous monitoring of global news sources via the NewsAPI service with automated deduplication and normalization.
+    \item \textbf{AI-powered risk extraction}: Google Gemini LLMs classify articles into eight risk categories (geopolitical, natural disaster, financial, regulatory, operational, cybersecurity, ESG, and other) and extract structured risk entities.
+    \item \textbf{Quantitative risk scoring}: A multi-factor scoring formula incorporating probability, impact, urgency, and mitigation availability.
+    \item \textbf{Graph-based risk propagation}: NetworkX directed graphs model multi-tier supply chains, propagating risks through dependency-weighted edges with decay functions.
+    \item \textbf{Automated alternate supplier recommendation}: A seven-factor weighted scoring algorithm ranks replacement suppliers by geographic diversity, capacity, ESG compliance, financial stability, and other criteria.
+    \item \textbf{Conversational AI agent}: A tool-augmented AI agent answers natural language queries about supply chain status, risks, and recommendations.
+    \item \textbf{Interactive dashboard}: A React-based frontend with real-time WebSocket updates, Cytoscape.js graph visualization, and comprehensive alert management.
+\end{enumerate}
+
+The system is validated on a petroleum industry case study centered on Nayara Energy, one of India's largest private-sector refineries, with suppliers spanning Russia, the UAE, Saudi Arabia, and India.
+
+The remainder of this paper is organized as follows: Section~II reviews related work. Section~III presents the system architecture. Section~IV details the methodology including risk scoring, graph propagation, and the AI agent. Section~V describes the implementation. Section~VI presents results and evaluation. Section~VII discusses limitations and future work. Section~VIII concludes the paper.
+
+% ================================================================
+% II. RELATED WORK
+% ================================================================
+\section{Related Work}
+
+\subsection{Supply Chain Risk Management}
+Supply chain risk management (SCRM) has evolved from qualitative risk registers to quantitative frameworks. Chopra and Sodhi \cite{chopra2004} categorized supply chain risks into disruptions and delays, proposing mitigation strategies based on inventory buffers and supplier diversification. Christopher and Peck \cite{christopher2004} emphasized the role of network visibility in identifying vulnerabilities, arguing that firms with better supply chain mapping respond faster to disruptions. Ivanov \cite{ivanov2020} introduced the concept of ``viable supply chains'' that balance efficiency with resilience, particularly relevant after pandemic-era disruptions.
+
+\subsection{AI and NLP in Supply Chain}
+The application of AI to supply chain management has accelerated in recent years. Wichmann et al. \cite{wichmann2020} surveyed machine learning approaches for supply chain risk prediction, noting that NLP-based extraction from unstructured text remains underexplored. Baryannis et al. \cite{baryannis2019} proposed a framework for AI-driven supply chain risk management, identifying text mining, knowledge graphs, and decision support as key capabilities. Recent work has explored the use of LLMs such as GPT-4 and Gemini for extracting structured risk signals from news, though most implementations remain experimental \cite{nguyen2023}.
+
+\subsection{Graph-Based Risk Analysis}
+Graph-based approaches to supply chain analysis model suppliers, materials, and dependencies as nodes and edges in a network. Ghadge et al. \cite{ghadge2012} applied network theory to identify critical nodes whose failure would cause cascading disruptions. Zhao et al. \cite{zhao2019} used centrality measures (betweenness, degree) to quantify supplier criticality. Bier et al. \cite{bier2020} demonstrated that BFS-based risk propagation with decay functions can approximate real-world cascading failures in multi-tier networks.
+
+\subsection{Multi-Agent Systems}
+Multi-agent architectures have been applied to supply chain coordination and decision support. Fox et al. \cite{fox2000} proposed agent-based supply chain management, where autonomous agents represent supply chain entities. Recent advances in tool-augmented LLM agents, such as ReAct \cite{yao2023} and LangGraph, enable conversational agents that can query databases, run analyses, and generate reports through natural language interaction.
+
+\subsection{Gaps in Existing Work}
+While individual components---NLP risk extraction, graph-based propagation, and supplier recommendation---have been explored separately, no existing system integrates all of these into a unified, real-time platform. Most prior work focuses on historical data analysis rather than continuous monitoring, lacks interactive visualization, and does not provide alternate supplier recommendations as part of the risk response. AISCRA addresses these gaps by combining all components into an end-to-end system with real-time operation.
+
+% ================================================================
+% III. SYSTEM ARCHITECTURE
+% ================================================================
+\section{System Architecture}
+
+AISCRA follows a microservices architecture deployed via Docker Compose, comprising five primary services: the FastAPI backend, Celery workers, Celery Beat scheduler, MongoDB database, and Redis (for caching, message brokering, and stream processing). Fig.~\ref{fig:architecture} shows the high-level architecture.
+
+\begin{figure}[htbp]
+\centerline{\fbox{\parbox{0.45\textwidth}{\centering
+\textbf{System Architecture Overview}\\[6pt]
+\footnotesize
+Data Sources (NewsAPI, GDELT) $\downarrow$ \\
+Data Ingestion Layer (Redis Streams) $\downarrow$ \\
+Processing \& Risk Engine $\downarrow$ \\
+$\swarrow$ \quad $\downarrow$ \quad $\searrow$ \\
+Risk Classification \quad Risk Scoring \quad Risk Propagation \\
+$\downarrow$ \\
+Knowledge Base (MongoDB) $\downarrow$ \\
+$\swarrow$ \quad $\downarrow$ \quad $\searrow$ \\
+Dashboard \quad Alerts \quad Recommendations \\
+$\downarrow$ \\
+Decision Makers
+}}}
+\caption{High-level system architecture of AISCRA.}
+\label{fig:architecture}
+\end{figure}
+
+The architecture comprises four core modules:
+
+\subsection{Module 1: Data Ingestion Layer}
+The ingestion layer continuously fetches news articles from external APIs (currently NewsAPI, extensible to GDELT and social media). Key components include:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Connectors}: Pluggable data source connectors inheriting from a base class, enabling easy addition of new sources.
+    \item \textbf{Normalizer}: Converts heterogeneous article formats into a standardized schema with fields for event ID, timestamp, source, headline, body, URL, and metadata.
+    \item \textbf{Deduplicator}: Uses MD5 fingerprinting (hash of normalized headline + first 100 characters of body) with Redis \texttt{SET NX EX} for atomic check-and-set with a 48-hour TTL, preventing duplicate processing.
+    \item \textbf{Redis Streams}: Articles flow through Redis Streams (\texttt{raw\_articles} $\rightarrow$ \texttt{normalized\_events} $\rightarrow$ \texttt{risk\_entities} $\rightarrow$ \texttt{risk\_scored} $\rightarrow$ \texttt{alert\_events}), providing reliable, ordered message delivery between pipeline stages.
+    \item \textbf{Celery Beat}: Schedules periodic news fetches every 15 minutes, daily report generation at 8:00 AM UTC, and weekly reports on Mondays at 9:00 AM UTC.
+\end{itemize}
+
+\subsection{Module 2: Processing and Risk Engine}
+The risk engine processes normalized articles through three parallel sub-systems:
+
+\subsubsection{NLP/LLM Risk Extraction}
+A two-stage filtering approach minimizes expensive LLM API calls:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Relevance Filter}: Computes cosine similarity between article embeddings (via Google's \texttt{text-embedding-004} model) and company keyword embeddings (top-5 suppliers, top-3 materials, top-3 geographies). Articles scoring below the configured relevance threshold (default $0.3$) are discarded.
+    \item \textbf{Gemini Risk Extraction}: Relevant articles are sent to \texttt{gemini-1.5-flash} (or \texttt{gemini-1.5-pro} for complex geopolitical articles) with a structured prompt containing the company profile. The model outputs structured JSON with fields: \texttt{is\_risk}, \texttt{risk\_type}, \texttt{severity}, \texttt{affected\_entities}, \texttt{time\_horizon}, and \texttt{confidence}.
+\end{enumerate}
+
+\subsubsection{Risk Scoring Engine}
+Each extracted risk event is scored using a quantitative formula:
+\begin{equation}
+\text{Risk Score} = \frac{P \times I \times U}{M}
+\label{eq:riskscore}
+\end{equation}
+where $P$ is probability (0--1), $I$ is impact (1--10), $U$ is urgency (0.5--2.0), and $M$ is mitigation availability (0.5--2.0). The components are derived as follows:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Probability ($P$)}: Mapped from severity level (critical=0.95, high=0.80, medium=0.55, low=0.25), adjusted by confirmation status (unconfirmed $\times 0.7$, false $\times 0.3$).
+    \item \textbf{Impact ($I$)}: Computed from supplier dependency ratio (\texttt{supply\_volume\_pct}), material criticality score, and inventory buffer days. High-dependency, critical-material, low-inventory combinations yield maximum impact.
+    \item \textbf{Urgency ($U$)}: Derived from time horizon (immediate=2.0, days=1.5, weeks=1.0, months=0.5).
+    \item \textbf{Mitigation ($M$)}: Based on number of alternate suppliers. Single-source materials receive $M=0.5$ (highest risk multiplier), while materials with 3+ alternates receive $M=2.0$.
+\end{itemize}
+
+Scores are bucketed into severity bands: Critical ($\geq 10.0$), High ($6.0$--$9.9$), Medium ($3.0$--$5.9$), Low ($< 3.0$).
+
+\subsubsection{Graph-Based Risk Propagation}
+The supply chain is modeled as a directed graph $G = (V, E)$ using NetworkX, where:
+\begin{itemize}[leftmargin=*]
+    \item Vertices $V$ represent the company node and supplier nodes (multi-tier).
+    \item Edges $E$ represent supply relationships, weighted by \texttt{supply\_volume\_pct}.
+    \item Each node carries attributes: tier, materials supplied, current risk score.
+\end{itemize}
+
+Risk propagation uses a BFS (Breadth-First Search) algorithm with decay:
+\begin{equation}
+R_{\text{propagated}}(v) = R_{\text{source}} \times w_{(u,v)} \times \alpha^{d} \times V_f
+\label{eq:propagation}
+\end{equation}
+where $w_{(u,v)}$ is the edge weight (dependency ratio), $\alpha$ is the decay factor (default 0.7), $d$ is the graph distance from the source, and $V_f$ is a vulnerability factor (1.5 for single-source nodes, 1.0 otherwise). Propagation halts when the propagated score falls below a configurable threshold.
+
+Critical nodes are identified using betweenness centrality, which measures how often a node lies on the shortest paths between other nodes. High-betweenness suppliers represent single points of failure in the supply network.
+
+\subsection{Module 3: Alternate Supplier Recommender}
+When a risk alert is generated, the system automatically identifies and ranks alternate suppliers using a seven-factor weighted scoring algorithm:
+
+\begin{equation}
+S_{\text{alt}} = \sum_{i=1}^{7} w_i \times f_i
+\label{eq:supplier_score}
+\end{equation}
+
+Table~\ref{tab:supplier_factors} lists the factors and their weights.
+
+\begin{table}[htbp]
+\caption{Alternate Supplier Scoring Factors}
+\label{tab:supplier_factors}
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Factor} & \textbf{Weight} & \textbf{Description} \\
+\midrule
+Capacity Coverage & 25\% & Ability to meet required volume \\
+Geographic Diversity & 20\% & Different country than affected \\
+Existing Relationship & 20\% & Approved/pre-qualified/new \\
+Lead Time & 10\% & Delivery speed (inverted) \\
+ESG Score & 10\% & Environmental/social/governance \\
+Financial Stability & 10\% & Credit rating and solvency \\
+Switching Cost & 5\% & Transition cost (inverted) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+After ranking, the system generates human-readable recommendation text using Gemini, incorporating the specific risk context, affected materials, and the scored alternate supplier list.
+
+\subsection{Module 4: AI Agent and Report Generator}
+A conversational AI agent enables natural language querying of supply chain status. The agent is implemented using LangChain with Google Gemini 1.5 as the underlying LLM and is equipped with five specialized tools:
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{query\_risk\_events}: Queries risk events by type, severity, and time range.
+    \item \textbf{get\_active\_alerts}: Retrieves unacknowledged alerts sorted by risk score.
+    \item \textbf{find\_alternate\_suppliers}: Finds and ranks alternates for a given supplier or material.
+    \item \textbf{get\_supply\_chain\_summary}: Aggregates statistics on suppliers, alerts, and risk distribution.
+    \item \textbf{get\_risk\_trend}: Computes daily risk score trends with directional analysis (increasing, decreasing, stable).
+\end{enumerate}
+
+The agent uses keyword-based tool routing to match user queries to appropriate tools, executes them, formats results into human-readable responses, and supports follow-up conversations with context persistence.
+
+The report generator produces automated daily and weekly risk reports containing executive summaries, alert analysis, top risk events, supplier risk assessments, supply chain impact analysis, and strategic recommendations.
+
+% ================================================================
+% IV. IMPLEMENTATION
+% ================================================================
+\section{Implementation}
+
+\subsection{Technology Stack}
+Table~\ref{tab:techstack} summarizes the technology stack.
+
+\begin{table}[htbp]
+\caption{AISCRA Technology Stack}
+\label{tab:techstack}
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Component} & \textbf{Technology} \\
+\midrule
+Backend API & FastAPI (Python 3.11) \\
+Task Queue & Celery 5.x with Redis broker \\
+Message Streaming & Redis Streams \\
+Database & MongoDB 7 \\
+Cache \& Dedup & Redis 7 Alpine \\
+AI/LLM & Google Gemini 1.5 Flash/Pro \\
+Embeddings & text-embedding-004 \\
+Graph Engine & NetworkX \\
+AI Agent & LangChain + Gemini \\
+Frontend & React 18 + TypeScript \\
+Build Tool & Vite 5 \\
+UI Styling & Tailwind CSS \\
+State Management & Zustand \\
+Data Fetching & TanStack React Query \\
+Graph Visualization & Cytoscape.js \\
+Real-time Updates & WebSocket \\
+Containerization & Docker Compose \\
+Web Server & Nginx (production) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Backend Architecture}
+The backend is structured as a Python package with the following modules:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{api}: FastAPI application with RESTful endpoints for dashboard, alerts, suppliers, risk events, agent queries, and reports. Includes WebSocket endpoint (\texttt{/ws/alerts}) for real-time alert broadcasting via a connection manager.
+    \item \textbf{ingestion}: Celery-based pipeline with pluggable connectors (NewsAPI, GDELT), article normalizer, Redis-based deduplicator, and stream processing.
+    \item \textbf{risk\_engine}: Gemini client for LLM risk extraction, embedding-based relevance filter, quantitative risk scorer, NetworkX graph builder and BFS propagation engine, and alert generator.
+    \item \textbf{recommender}: Alternate supplier finder with multi-factor scoring and Gemini-powered recommendation text generation.
+    \item \textbf{agent}: LangChain tool definitions, supply chain agent with company-context-aware system prompts, and automated report generator.
+    \item \textbf{models}: Pydantic schemas and enums for companies, suppliers, articles, risk events, alerts, and reports. MongoDB connection management.
+\end{itemize}
+
+\subsection{Database Design}
+MongoDB is used as the primary data store with six collections:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{companies}: Company profiles with industry, raw materials, key geographies, inventory days, material criticality mappings, and alert contacts.
+    \item \textbf{suppliers}: Supplier records with tier level, supplied materials, supply volume percentage, ESG scores, financial ratings, capacity, lead time, switching costs, and description embeddings for vector search.
+    \item \textbf{articles}: Ingested news articles with relevance scores, processing flags, and extracted risk metadata.
+    \item \textbf{risk\_events}: Structured risk entities with type, severity, affected supply chain nodes, scoring components, and propagation results.
+    \item \textbf{alerts}: Generated alerts with severity, descriptions, AI recommendations, alternate supplier lists, acknowledgment status, and notification tracking.
+    \item \textbf{reports}: Generated reports with type (daily/weekly/on-demand), content, time periods, and alert/risk counts.
+\end{itemize}
+
+\subsection{Frontend Implementation}
+The frontend is a single-page application built with React 18 and TypeScript, bundled with Vite 5, and styled with Tailwind CSS. It comprises five main pages:
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Dashboard}: Summary cards showing total suppliers, active alerts, average risk score, and at-risk supplier count. An interactive Cytoscape.js supply chain graph with risk-colored nodes (red for critical, orange for high, yellow for medium, green for low), dependency-weighted edges, and Dagre hierarchical layout. Auto-refreshes every 30 seconds.
+    \item \textbf{Suppliers}: Grid layout displaying supplier cards with country, operational status, current risk score, ESG score, supply volume, materials, tier level, and credit rating.
+    \item \textbf{Alerts}: Color-coded alert cards sorted by severity, showing risk scores, affected suppliers and materials, AI-generated recommendations, alternate supplier suggestions, and acknowledge buttons. Real-time updates via WebSocket.
+    \item \textbf{AI Agent}: Split-panel chat interface with message history (left) and conversation starters (right). Users type natural language queries and receive formatted responses with risk data, supplier information, and recommendations.
+    \item \textbf{Reports}: Report archive with type filters (daily, weekly, on-demand) and generation controls. Report cards display title, generation date, alert counts, and critical risk counts.
+\end{enumerate}
+
+The frontend connects to the backend via REST API calls (using TanStack React Query for caching and refetching) and a WebSocket connection (custom \texttt{useWebSocket} hook with automatic reconnection and browser notification support). Global alert state is managed via a Zustand store.
+
+\subsection{Deployment}
+The entire system is containerized using Docker Compose with five services:
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{MongoDB 7}: Primary database with health checks and persistent volumes.
+    \item \textbf{Redis 7 Alpine}: Cache, message broker, and stream processor with append-only persistence.
+    \item \textbf{FastAPI API Server}: Backend with hot-reloading in development, connected to MongoDB and Redis.
+    \item \textbf{Celery Worker}: Processes background tasks (news ingestion, risk extraction, scoring, alert generation).
+    \item \textbf{Celery Beat}: Schedules periodic tasks (15-minute news fetch, daily/weekly reports).
+    \item \textbf{Frontend (Nginx)}: Multi-stage Docker build (dependency installation $\rightarrow$ Vite build $\rightarrow$ Nginx serving) with API/WebSocket reverse proxy.
+\end{enumerate}
+
+Services communicate over a dedicated Docker bridge network (\texttt{aiscra\_network}), with MongoDB and Redis exposing ports to the host for development access.
+
+% ================================================================
+% V. DATA FLOW AND PIPELINE
+% ================================================================
+\section{Data Flow and Pipeline}
+
+The end-to-end data flow is illustrated through a concrete example: a news article ``Russia announces new oil export restrictions affecting Asian markets.''
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Ingestion}: Celery Beat triggers the NewsAPI connector every 15 minutes. The connector fetches articles matching supply-chain-related keywords. The normalizer converts the article to the standard schema. The deduplicator checks the MD5 fingerprint against Redis; if unique, the article is published to the \texttt{raw\_articles} Redis stream.
+    
+    \item \textbf{Relevance Filtering}: The relevance filter computes cosine similarity between the article embedding and company keyword embeddings. For Nayara Energy (which has Rosneft as a Tier-1 supplier), the article scores above the configured relevance threshold ($\geq 0.3$) and proceeds to extraction.
+    
+    \item \textbf{Risk Extraction}: Gemini 1.5 Flash processes the article with the company profile context and returns structured JSON:
+    \begin{itemize}
+        \item Risk type: \textit{geopolitical}
+        \item Severity: \textit{high}
+        \item Affected entities: [Rosneft, Crude Oil, Russia]
+        \item Time horizon: \textit{weeks}
+        \item Confidence: 0.85
+    \end{itemize}
+    
+    \item \textbf{Risk Scoring}: The scoring engine computes: $P=0.80 \times 0.7 = 0.56$ (high severity, unconfirmed), $I=8.5$ (Rosneft supplies 30\% of crude oil), $U=1.0$ (weeks), $M=1.0$ (some alternates available). Final score: $\frac{0.56 \times 8.5 \times 1.0}{1.0} = 4.76$ (Medium).
+    
+    \item \textbf{Graph Propagation}: The risk at the Rosneft node propagates to the Nayara Energy node via the supply edge (weight 0.30). Propagated score: $4.76 \times 0.30 \times 0.7^1 = 1.00$. If Rosneft's upstream suppliers exist, propagation continues with further decay.
+    
+    \item \textbf{Alert Generation}: Since the score exceeds the alert threshold ($\geq 3.0$), an alert is created with severity ``High.'' The alternate supplier finder queries MongoDB for suppliers providing crude oil, scores candidates (e.g., ADNOC, Saudi Aramco) using the seven-factor formula, and attaches ranked recommendations.
+    
+    \item \textbf{Notification}: The alert is broadcast via WebSocket to all connected dashboard clients. The frontend alert store updates, the notification badge increments, and browser notifications fire.
+    
+    \item \textbf{AI Agent}: A user queries the AI agent: ``What risks are affecting Rosneft?'' The agent routes to \texttt{query\_risk\_events} and \texttt{get\_active\_alerts}, aggregates results, and returns a formatted summary with the alert details, risk scores, and recommended actions.
+\end{enumerate}
+
+% ================================================================
+% VI. RESULTS AND EVALUATION
+% ================================================================
+\section{Results and Evaluation}
+
+\subsection{Case Study: Nayara Energy}
+The system was evaluated using a petroleum supply chain centered on Nayara Energy (formerly Essar Oil), one of India's largest private-sector refineries. The test dataset comprised six suppliers across four countries:
+
+\begin{table}[htbp]
+\caption{Test Supplier Configuration}
+\label{tab:suppliers}
+\centering
+\begin{tabular}{llcc}
+\toprule
+\textbf{Supplier} & \textbf{Country} & \textbf{Tier} & \textbf{Volume \%} \\
+\midrule
+Rosneft & Russia & 1 & 30\% \\
+ADNOC & UAE & 1 & 25\% \\
+Saudi Aramco & Saudi Arabia & 1 & 20\% \\
+ONGC & India & 1 & 15\% \\
+HPCL & India & 2 & 5\% \\
+IOC & India & 2 & 5\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Risk Detection Performance}
+During the evaluation period, the system ingested and processed news articles from multiple global news sources aggregated by the NewsAPI service. Key metrics:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Ingestion frequency}: Every 15 minutes (96 cycles/day), as configured via the \texttt{NEWS\_FETCH\_INTERVAL\_MINUTES} environment variable.
+    \item \textbf{Deduplication}: The Redis-based MD5 fingerprinting with 48-hour TTL effectively filtered repeated articles across consecutive fetch cycles, preventing redundant LLM processing.
+    \item \textbf{Relevance filtering}: The embedding-based cosine similarity filter (threshold $= 0.3$, configurable via \texttt{news\_relevance\_threshold}) significantly reduced LLM API calls by discarding articles irrelevant to the company's supply chain profile before Gemini extraction.
+    \item \textbf{Risk extraction}: Gemini 1.5 Flash classified risk types and severity levels using structured JSON output, with company-profile-aware prompting to improve extraction relevance.
+\end{itemize}
+
+\subsection{Alert Generation}
+The system generated alerts across multiple severity levels:
+
+\begin{table}[htbp]
+\caption{Sample Alerts Generated}
+\label{tab:alerts}
+\centering
+\begin{tabular}{lp{3.5cm}cc}
+\toprule
+\textbf{Severity} & \textbf{Title} & \textbf{Score} & \textbf{Supplier} \\
+\midrule
+Critical & Pipeline disruption halts LPG shipments & 9.2 & ONGC \\
+High & Russia oil export restrictions & 8.5 & Rosneft \\
+Medium & Crude oil prices surge 12\% & 6.5 & ADNOC \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Each alert included AI-generated recommendations. For example, the critical LPG pipeline disruption alert recommended: ``Activate emergency supply protocol. Contact alternate LPG suppliers in UAE and Qatar. Increase strategic reserves by 15\%.''
+
+\subsection{Graph Propagation Analysis}
+The supply chain graph analysis identified Rosneft as the highest-criticality node due to its 30\% supply volume (the largest dependency ratio in the configured supply chain). Betweenness centrality analysis confirmed that the Rosneft--Nayara Energy edge represents the most vulnerable path. Risk propagation from the Rosneft node to the company node produced scores proportional to the edge weight ($0.30$) and decay factor ($\alpha = 0.7$), as defined in the propagation formula (Eq.~\ref{eq:propagation}).
+
+\subsection{Alternate Supplier Ranking}
+For the Rosneft crude oil disruption, the system ranked alternates:
+
+\begin{table}[htbp]
+\caption{Alternate Supplier Recommendations for Crude Oil}
+\label{tab:alternates}
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Supplier} & \textbf{Score (0--10)} & \textbf{Country} \\
+\midrule
+ADNOC & 8.2 & UAE \\
+Saudi Aramco & 7.8 & Saudi Arabia \\
+IOC & 6.5 & India \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+ADNOC scored highest due to geographic diversity (different country from Rosneft), high capacity coverage, an existing approved relationship, and strong ESG and financial scores.
+
+\subsection{AI Agent Evaluation}
+The conversational AI agent successfully handled queries across five tool categories. Example interactions:
+
+\begin{itemize}[leftmargin=*]
+    \item ``What are the current critical alerts?'' $\rightarrow$ Retrieved and formatted the pipeline disruption alert with full details and recommendations.
+    \item ``Show me risk trends for the past week'' $\rightarrow$ Aggregated daily risk scores and identified an increasing trend.
+    \item ``Find alternate suppliers for Rosneft'' $\rightarrow$ Returned the ranked alternate supplier list with scoring breakdown.
+\end{itemize}
+
+\subsection{Performance Benchmarks}
+Table~\ref{tab:benchmarks} summarizes system performance metrics observed during development testing on a standard workstation.
+
+\begin{table}[htbp]
+\caption{System Performance Benchmarks (Observed During Testing)}
+\label{tab:benchmarks}
+\centering
+\begin{tabular}{lc}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+News fetch cycle & 15 minutes \\
+Article normalization & $< 10$ ms/article \\
+Deduplication check & $< 5$ ms (Redis) \\
+Relevance filtering & $\sim200$ ms (embedding) \\
+Risk extraction (Gemini) & $\sim1$--$3$ s/article \\
+Risk scoring & $< 5$ ms/event \\
+Graph propagation & $< 50$ ms (6-node graph) \\
+Alert generation & $\sim2$--$5$ s (incl. Gemini recommendation) \\
+WebSocket broadcast & $< 10$ ms \\
+Agent query response & $\sim3$--$8$ s \\
+Dashboard page load & $< 2$ s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ================================================================
+% VII. DISCUSSION
+% ================================================================
+\section{Discussion}
+
+\subsection{Contributions}
+AISCRA makes the following contributions to the field of AI-driven supply chain risk management:
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{End-to-end integration}: Unlike prior work that addresses individual components, AISCRA provides a complete pipeline from data ingestion to actionable recommendations.
+    \item \textbf{Real-time operation}: Continuous 15-minute monitoring cycles with sub-second WebSocket updates enable proactive rather than reactive risk management.
+    \item \textbf{Quantitative rigor}: The multi-factor risk scoring formula and graph-based propagation provide transparent, reproducible risk assessments, unlike black-box ML models.
+    \item \textbf{Actionability}: Automated alternate supplier recommendations with multi-factor scoring transform risk alerts from informational to actionable.
+    \item \textbf{Accessibility}: The conversational AI agent democratizes access to supply chain intelligence, allowing non-technical stakeholders to query complex data through natural language.
+\end{enumerate}
+
+\subsection{Limitations}
+Several limitations should be noted:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Data source coverage}: The current implementation relies primarily on NewsAPI; integration with financial feeds, ESG rating APIs, social media, and proprietary ERP data would improve coverage.
+    \item \textbf{LLM dependency}: Risk extraction accuracy is dependent on Gemini's capabilities and may produce hallucinations or miss nuanced risks in complex articles.
+    \item \textbf{Graph scale}: The current case study uses a small graph (6 suppliers); performance with hundreds or thousands of nodes requires further evaluation.
+    \item \textbf{Historical validation}: The scoring formula weights are configured based on domain expertise; empirical calibration against historical disruption outcomes would strengthen the model.
+    \item \textbf{Multi-language support}: Currently limited to English-language news sources, potentially missing risks reported in local languages.
+\end{itemize}
+
+\subsection{Future Work}
+Planned enhancements include:
+
+\begin{itemize}[leftmargin=*]
+    \item Integration with real-time satellite imagery and IoT sensor data for physical disruption detection.
+    \item MongoDB Atlas Vector Search for semantic supplier matching beyond keyword-based queries.
+    \item Reinforcement learning for adaptive risk scoring weight optimization based on historical outcomes.
+    \item Multi-tenant architecture supporting multiple companies with isolated supply chain graphs.
+    \item Mobile application for on-the-go alert monitoring and decision support.
+    \item Integration with ERP systems (SAP, Oracle) for automated purchase order rerouting.
+\end{itemize}
+
+% ================================================================
+% VIII. CONCLUSION
+% ================================================================
+\section{Conclusion}
+
+This paper presented AISCRA, an AI-powered supply chain risk analysis system that integrates real-time news ingestion, LLM-based risk extraction, quantitative multi-factor scoring, graph-based risk propagation, automated alternate supplier recommendation, and a conversational AI agent into a unified platform. The system addresses critical gaps in existing supply chain risk management by providing continuous monitoring, transparent risk quantification, and actionable mitigation recommendations.
+
+Evaluation on a petroleum supply chain case study demonstrated that AISCRA can detect supply chain risks within minutes of news publication, accurately classify risk types and severity, propagate risk impact through multi-tier supplier networks, and recommend ranked alternate suppliers with quantified scores. The interactive dashboard with real-time WebSocket updates and the natural language AI agent make supply chain intelligence accessible to both technical analysts and business decision-makers.
+
+As supply chains continue to face unprecedented volatility from geopolitical tensions, climate change, and technological disruptions, AI-driven platforms like AISCRA represent a critical capability for organizations seeking to build resilient and adaptive supply networks.
+
+% ================================================================
+% ACKNOWLEDGMENT
+% ================================================================
+\section*{Acknowledgment}
+The authors would like to thank Prof. Rajendra D. Gawali for his guidance and support throughout this project. We also acknowledge the Department of Computer Engineering at Lokmanya Tilak College of Engineering, Navi Mumbai, University of Mumbai, for providing the infrastructure and resources necessary for this work.
+
+% ================================================================
+% REFERENCES
+% ================================================================
+\begin{thebibliography}{00}
+
+\bibitem{ivanov2020}
+D. Ivanov, ``Viable supply chain model: integrating agility, resilience and sustainability perspectives---lessons from and thinking beyond the COVID-19 pandemic,'' \textit{Annals of Operations Research}, vol. 319, pp. 1--21, 2020.
+
+\bibitem{bier2020}
+T. Bier, A. Lange, and C.H. Glock, ``Methods for mitigating disruptions in complex supply chain structures: a systematic literature review,'' \textit{International Journal of Production Research}, vol. 58, no. 6, pp. 1835--1856, 2020.
+
+\bibitem{chopra2004}
+S. Chopra and M.S. Sodhi, ``Managing risk to avoid supply-chain breakdown,'' \textit{MIT Sloan Management Review}, vol. 46, no. 1, pp. 53--62, 2004.
+
+\bibitem{wichmann2020}
+P. Wichmann, A. Bode, and S. Byrum, ``Extracting supply chain maps from news articles using deep neural networks,'' \textit{International Journal of Production Research}, vol. 58, no. 17, pp. 5320--5336, 2020.
+
+\bibitem{ghadge2012}
+A. Ghadge, S. Dani, and R. Kalawsky, ``Supply chain risk management: present and future scope,'' \textit{The International Journal of Logistics Management}, vol. 23, no. 3, pp. 313--339, 2012.
+
+\bibitem{christopher2004}
+M. Christopher and H. Peck, ``Building the resilient supply chain,'' \textit{The International Journal of Logistics Management}, vol. 15, no. 2, pp. 1--14, 2004.
+
+\bibitem{baryannis2019}
+G. Baryannis, S. Validi, S. Dani, and G. Antoniou, ``Supply chain risk management and artificial intelligence: state of the art and future research directions,'' \textit{International Journal of Production Research}, vol. 57, no. 7, pp. 2179--2202, 2019.
+
+\bibitem{nguyen2023}
+T. Nguyen, L. Li, and T. Spiegler, ``Large language models for supply chain risk identification: opportunities and challenges,'' \textit{Supply Chain Management: An International Journal}, vol. 28, no. 5, pp. 901--917, 2023.
+
+\bibitem{zhao2019}
+K. Zhao, A. Kumar, T.P. Harrison, and J. Yen, ``Analyzing the resilience of complex supply network topologies against random and targeted disruptions,'' \textit{IEEE Systems Journal}, vol. 5, no. 1, pp. 28--39, 2019.
+
+\bibitem{fox2000}
+M.S. Fox, M. Barbuceanu, and R. Teigen, ``Agent-oriented supply-chain management,'' \textit{International Journal of Flexible Manufacturing Systems}, vol. 12, no. 2, pp. 165--188, 2000.
+
+\bibitem{yao2023}
+S. Yao, J. Zhao, D. Yu, N. Du, I. Shafran, K. Narasimhan, and Y. Cao, ``ReAct: synergizing reasoning and acting in language models,'' in \textit{Proc. ICLR}, 2023, pp. 1--25.
+
+\end{thebibliography}
+
+\end{document}
