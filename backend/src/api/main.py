@@ -108,9 +108,9 @@ async def get_dashboard_summary():
         
         # Aggregate alerts by severity
         pipeline = [
-            {"$match": {"company_id": company_id, "acknowledged": False}},
+            {"$match": {"company_id": company_id, "is_acknowledged": False}},
             {"$group": {
-                "_id": "$severity",
+                "_id": {"$ifNull": ["$severity", "$severity_band"]},
                 "count": {"$sum": 1},
                 "avg_score": {"$avg": "$risk_score"}
             }}
@@ -169,6 +169,41 @@ async def get_dashboard_summary():
 
 # ==================== Alert Endpoints ====================
 
+def normalize_alert(alert: dict) -> dict:
+    """Normalize DB alert fields to frontend-expected format."""
+    alert["_id"] = str(alert["_id"])
+    if "risk_event_id" in alert:
+        alert["risk_event_id"] = str(alert["risk_event_id"])
+
+    # severity_band -> severity
+    if "severity" not in alert or not alert["severity"]:
+        alert["severity"] = alert.get("severity_band", "low")
+
+    # affected_supplier (str) -> affected_suppliers (list)
+    if "affected_suppliers" not in alert or not isinstance(alert.get("affected_suppliers"), list):
+        supplier = alert.get("affected_supplier") or ""
+        alert["affected_suppliers"] = [supplier] if supplier else []
+
+    # affected_material (str) -> affected_materials (list)
+    if "affected_materials" not in alert or not isinstance(alert.get("affected_materials"), list):
+        material = alert.get("affected_material") or ""
+        alert["affected_materials"] = [material] if material else []
+
+    # recommendations -> alternate_suppliers
+    if "alternate_suppliers" not in alert or not isinstance(alert.get("alternate_suppliers"), list):
+        alert["alternate_suppliers"] = alert.get("recommendations", [])
+
+    # recommendation_text -> recommendation
+    if "recommendation" not in alert or not alert["recommendation"]:
+        alert["recommendation"] = alert.get("recommendation_text") or ""
+
+    # acknowledged_at from is_acknowledged
+    if not alert.get("acknowledged_at") and alert.get("is_acknowledged"):
+        alert["acknowledged_at"] = alert.get("updated_at")
+
+    return alert
+
+
 @app.get("/api/alerts")
 async def get_alerts(
     severity: Optional[str] = None,
@@ -180,27 +215,23 @@ async def get_alerts(
     """
     try:
         query = {"company_id": settings.company_id}
-        
+
         if severity:
             query["severity_band"] = severity
-        
+
         if acknowledged is not None:
-            query["acknowledged"] = acknowledged
-        
+            query["is_acknowledged"] = acknowledged
+
         alerts = list(
             db_manager.alerts.find(query)
             .sort("created_at", -1)
             .limit(limit)
         )
-        
-        # Convert ObjectId to string
-        for alert in alerts:
-            alert["_id"] = str(alert["_id"])
-            if "risk_event_id" in alert:
-                alert["risk_event_id"] = str(alert["risk_event_id"])
-        
+
+        alerts = [normalize_alert(a) for a in alerts]
+
         return {"alerts": alerts, "count": len(alerts)}
-    
+
     except Exception as e:
         logger.error(f"Error getting alerts: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -211,15 +242,11 @@ async def get_alert(alert_id: str):
     """Get single alert by ID"""
     try:
         alert = db_manager.alerts.find_one({"_id": alert_id})
-        
+
         if not alert:
             raise HTTPException(status_code=404, detail="Alert not found")
-        
-        alert["_id"] = str(alert["_id"])
-        if "risk_event_id" in alert:
-            alert["risk_event_id"] = str(alert["risk_event_id"])
-        
-        return alert
+
+        return normalize_alert(alert)
     
     except HTTPException:
         raise
@@ -540,6 +567,107 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+# ==================== Pipeline Control Endpoints ====================
+
+@app.get("/api/pipeline/status")
+async def pipeline_status():
+    """
+    Get current pipeline status and recent run history.
+    Shows whether the pipeline is idle, running, or failed.
+    """
+    try:
+        from src.ingestion.pipeline import get_pipeline_status, get_pipeline_history
+
+        status = get_pipeline_status()
+        history = get_pipeline_history(limit=10)
+
+        return {
+            "current": status,
+            "recent_runs": history,
+            "schedule": {
+                "interval_minutes": settings.news_fetch_interval_minutes,
+                "description": (
+                    f"Automatic pipeline runs every "
+                    f"{settings.news_fetch_interval_minutes} minutes via Celery Beat"
+                ),
+            },
+        }
+    except Exception as e:
+        logger.error(f"Error getting pipeline status: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pipeline/trigger")
+async def trigger_pipeline():
+    """
+    Manually trigger a full pipeline run (fetch -> extract -> score -> alert).
+    The pipeline runs asynchronously via Celery.
+    Returns the Celery task ID for tracking.
+    """
+    try:
+        from src.ingestion.celery_app import run_pipeline
+
+        task = run_pipeline.delay()
+        logger.info(f"Pipeline triggered manually, task_id={task.id}")
+
+        return {
+            "status": "triggered",
+            "task_id": task.id,
+            "message": "Full pipeline run dispatched to Celery worker",
+        }
+    except Exception as e:
+        logger.error(f"Error triggering pipeline: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pipeline/fetch-only")
+async def trigger_fetch_only():
+    """
+    Trigger only the fetch stage (NewsAPI + GDELT), without downstream processing.
+    Useful for testing or manually ingesting fresh articles.
+    """
+    try:
+        from src.ingestion.pipeline import stage_fetch
+        import uuid
+
+        run_id = uuid.uuid4().hex[:8]
+        result = stage_fetch(run_id)
+        return {"status": "completed", "run_id": run_id, "result": result}
+    except Exception as e:
+        logger.error(f"Error in fetch-only: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/pipeline/streams")
+async def get_stream_stats():
+    """
+    Show current Redis stream lengths for each pipeline stage.
+    Useful for monitoring backlog.
+    """
+    try:
+        from src.ingestion.redis_streams import stream_manager, RedisStreamManager
+
+        streams = {
+            "normalized_events": RedisStreamManager.STREAM_NORMALIZED_EVENTS,
+            "risk_entities": RedisStreamManager.STREAM_RISK_ENTITIES,
+            "risk_scores": RedisStreamManager.STREAM_RISK_SCORES,
+            "new_alerts": RedisStreamManager.STREAM_NEW_ALERTS,
+        }
+
+        result = {}
+        for label, stream_name in streams.items():
+            try:
+                length = stream_manager.get_stream_length(stream_name)
+            except Exception:
+                length = 0
+            result[label] = length
+
+        return {"streams": result}
+    except Exception as e:
+        logger.error(f"Error getting stream stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.websocket("/ws/alerts")

@@ -46,13 +46,25 @@ def normalize_gdelt_article(raw: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Normalized article dictionary
     """
+    # GDELT seendate is in format "20260219T120000Z"
+    seendate = raw.get("seendate", "")
+    if seendate and "T" in seendate and len(seendate) >= 15:
+        try:
+            ts = datetime.strptime(seendate[:15], "%Y%m%dT%H%M%S")
+        except ValueError:
+            ts = _parse_timestamp(seendate)
+    else:
+        ts = _parse_timestamp(seendate)
+
     return {
         "event_id": str(uuid.uuid4()),
-        "timestamp": _parse_timestamp(raw.get("seendate")),
+        "timestamp": ts,
         "source": "GDELT",
         "headline": raw.get("title", ""),
-        "body": raw.get("sharing_text", ""),
+        "body": raw.get("sharing_text", "") or raw.get("title", ""),
         "url": raw.get("url", ""),
+        "domain": raw.get("domain", ""),
+        "source_country": raw.get("sourcecountry", ""),
         "entities_mentioned": [],
         "raw_relevance_score": 0.0,
         "processed": False,

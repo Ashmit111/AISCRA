@@ -134,32 +134,32 @@ function RecentAlerts() {
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case 'critical': return 'text-red-600'
-      case 'high': return 'text-orange-500'
-      case 'medium': return 'text-yellow-600'
-      default: return 'text-blue-500'
+      case 'critical': return 'bg-red-600 text-white'
+      case 'high': return 'bg-orange-500 text-white'
+      case 'medium': return 'bg-yellow-500 text-white'
+      default: return 'bg-blue-500 text-white'
     }
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {alerts.map((alert) => (
-        <div key={alert._id} className="flex items-start justify-between border-b pb-4 last:border-0">
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className={`text-sm font-medium uppercase ${getSeverityColor(alert.severity)}`}>
+        <div key={alert._id} className="flex items-start justify-between gap-3 border-b pb-3 last:border-0">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getSeverityColor(alert.severity)}`}>
                 {alert.severity}
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground font-medium">
                 Score: {alert.risk_score.toFixed(1)}
               </span>
             </div>
-            <h4 className="font-medium mt-1">{alert.title}</h4>
-            <p className="text-sm text-muted-foreground mt-1">
-              Affected: {alert.affected_suppliers.join(', ')}
+            <h4 className="font-medium text-sm leading-snug truncate">{alert.title}</h4>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {(alert.affected_suppliers || []).join(', ')}
             </p>
           </div>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
             {new Date(alert.created_at).toLocaleDateString()}
           </span>
         </div>

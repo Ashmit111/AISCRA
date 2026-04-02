@@ -165,10 +165,9 @@ def find_alternates(
     # Return top N
     top_alternates = scored_alternates[:max_results]
     
-    logger.info(
-        f"Top {len(top_alternates)} alternates: "
-        f"{', '.join(f'{a['name']} ({a['score']})' for a in top_alternates[:3])}"
-    )
+    if top_alternates:
+        names_str = ", ".join(f"{a['name']} ({a['score']})" for a in top_alternates[:3])
+        logger.info(f"Top {len(top_alternates)} alternates: {names_str}")
     
     return top_alternates
 

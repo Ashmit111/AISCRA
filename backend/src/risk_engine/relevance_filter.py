@@ -1,43 +1,47 @@
 """
 Relevance Filter
-Pre-filters articles using embeddings to avoid expensive LLM calls on irrelevant content
+Pre-filters articles using keyword matching to avoid expensive LLM calls on irrelevant content
 """
 
 import logging
 from typing import Dict, Any, List
-import math
+import re
 
-from .gemini_client import get_gemini_client
 from ..utils.config import settings
 
 logger = logging.getLogger(__name__)
 
 
-def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
+def keyword_match_score(text: str, keywords: List[str]) -> float:
     """
-    Calculate cosine similarity between two vectors
+    Calculate relevance score based on keyword matching (partial match)
     
     Args:
-        vec1: First embedding vector
-        vec2: Second embedding vector
+        text: Text to search in
+        keywords: List of keywords to look for
     
     Returns:
-        Cosine similarity score (0-1)
+        Score between 0.0 and 1.0
     """
-    if not vec1 or not vec2 or len(vec1) != len(vec2):
-        return 0.0
+    if not text or not keywords:
+        return 0.5  # Default to moderate relevance if no data
     
-    # Dot product
-    dot_product = sum(a * b for a, b in zip(vec1, vec2))
+    text_lower = text.lower()
+    matched = 0
     
-    # Magnitudes
-    magnitude1 = math.sqrt(sum(a * a for a in vec1))
-    magnitude2 = math.sqrt(sum(b * b for b in vec2))
+    for kw in keywords:
+        kw_lower = kw.lower()
+        # Partial match - check if keyword stem appears
+        if len(kw_lower) > 3:
+            # For longer keywords, check if first 4 chars match
+            if kw_lower[:4] in text_lower:
+                matched += 1
+        else:
+            if kw_lower in text_lower:
+                matched += 1
     
-    if magnitude1 == 0 or magnitude2 == 0:
-        return 0.0
-    
-    return dot_product / (magnitude1 * magnitude2)
+    # Return ratio of matched keywords
+    return matched / len(keywords) if keywords else 0.0
 
 
 def calculate_relevance_score(
@@ -45,7 +49,7 @@ def calculate_relevance_score(
     company_keywords: List[str]
 ) -> float:
     """
-    Calculate relevance score for an article
+    Calculate relevance score for an article using keyword matching
     
     Args:
         article: Article dictionary with headline and body
@@ -54,25 +58,11 @@ def calculate_relevance_score(
     Returns:
         Relevance score (0.0-1.0)
     """
-    gemini_client = get_gemini_client()
-    
     # Combine article text
     article_text = f"{article.get('headline', '')} {article.get('body', '')}"
     
-    # Build keyword text
-    keyword_text = " ".join(company_keywords)
-    
     try:
-        # Get embeddings
-        article_embedding = gemini_client.get_embedding(article_text[:1000])  # Limit length
-        keyword_embedding = gemini_client.get_embedding(keyword_text[:1000])
-        
-        if not article_embedding or not keyword_embedding:
-            logger.warning("Failed to get embeddings, returning default score")
-            return 0.5
-        
-        # Calculate similarity
-        score = cosine_similarity(article_embedding, keyword_embedding)
+        score = keyword_match_score(article_text, company_keywords)
         
         logger.debug(f"Relevance score: {score:.3f} for article: {article.get('headline', '')[:80]}")
         
@@ -151,10 +141,19 @@ def build_company_keywords(company_profile: Dict) -> List[str]:
         )[:3]
         keywords.extend([mat for mat, _ in critical_materials])
     
+    # Raw materials
+    if "raw_materials" in company_profile:
+        keywords.extend(company_profile["raw_materials"])
+    
     # Key geographies (top 3)
     if "key_geographies" in company_profile:
         keywords.extend(company_profile["key_geographies"][:3])
     
-    logger.debug(f"Built {len(keywords)} keywords for relevance filter: {keywords}")
-    
-    return keywords
+    # Add supply chain risk terms (always relevant)
+    risk_terms = [
+        "supply chain", "shortage", "disruption", "sanctions",
+        "tariff", "port", "shipping", "logistics", "factory",
+        "oil", "crude", "refinery", "energy", "fuel",
+        "Russia", "Ukraine", "embargo", "export ban"
+    ]
+    keywords.extend(risk_terms)

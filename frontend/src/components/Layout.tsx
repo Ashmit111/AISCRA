@@ -6,7 +6,8 @@ import {
   AlertTriangle, 
   MessageSquare, 
   FileText,
-  Bell 
+  Bell,
+  Settings2 
 } from 'lucide-react'
 import { useAlertStore } from '@/stores/alertStore'
 import { useWebSocket } from '@/hooks/useWebSocket'
@@ -18,6 +19,7 @@ interface LayoutProps {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Pipeline', href: '/pipeline', icon: Settings2 },
   { name: 'Suppliers', href: '/suppliers', icon: Building2 },
   { name: 'Alerts', href: '/alerts', icon: AlertTriangle },
   { name: 'AI Agent', href: '/agent', icon: MessageSquare },

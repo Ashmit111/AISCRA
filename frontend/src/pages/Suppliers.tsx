@@ -23,8 +23,10 @@ export default function Suppliers() {
   const getStatusBadge = (status: string) => {
     const colors: Record<string, string> = {
       active: 'bg-green-100 text-green-800',
+      at_risk: 'bg-red-100 text-red-800',
       pre_qualified: 'bg-blue-100 text-blue-800',
       alternate: 'bg-gray-100 text-gray-800',
+      inactive: 'bg-yellow-100 text-yellow-800',
     }
     return colors[status] || 'bg-gray-100 text-gray-800'
   }
@@ -91,7 +93,7 @@ export default function Suppliers() {
                 <div>
                   <span className="text-sm text-muted-foreground">Materials:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {supplier.supplies.map((material) => (
+                    {(supplier.supplies || []).map((material) => (
                       <span key={material} className="px-2 py-1 bg-secondary text-secondary-foreground rounded text-xs">
                         {material}
                       </span>

@@ -5,6 +5,7 @@ import Suppliers from './pages/Suppliers'
 import Alerts from './pages/Alerts'
 import Agent from './pages/Agent'
 import Reports from './pages/Reports'
+import Pipeline from './pages/Pipeline'
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/agent" element={<Agent />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/pipeline" element={<Pipeline />} />
       </Routes>
     </Layout>
   )

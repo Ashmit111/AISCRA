@@ -12,8 +12,9 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     
     # API Keys
-    gemini_api_key: str
-    newsapi_key: str
+    groq_api_key: str = ""
+    gemini_api_key: str = ""
+    newsapi_key: str = ""
     sendgrid_api_key: Optional[str] = None
     
     # Database
@@ -34,7 +35,7 @@ class Settings(BaseSettings):
     
     # News Ingestion
     news_fetch_interval_minutes: int = 15
-    news_relevance_threshold: float = 0.3
+    news_relevance_threshold: float = 0.0  # Send all to LLM - let Groq decide relevance
     
     # Risk Scoring Thresholds
     alert_threshold_score: float = 3.0
